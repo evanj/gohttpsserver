@@ -1,4 +1,4 @@
-package main
+package gohttpsserver
 
 import (
 	"crypto/rand"
@@ -8,7 +8,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -24,24 +23,27 @@ func checkError(err error) {
 }
 
 const rsaBits = 2048
-const isCA = true
+const isCA = false
+const validYears = 1
 
 // end of ASN.1 time
-var endOfTime = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
+//var endOfTime = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
 
-func newSelfSignedCertificate() (tls.Certificate, error) {
+func NewSelfSignedCertificate() (tls.Certificate, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, rsaBits)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
 
-	notBefore := time.Now()
-	notAfter := endOfTime
+	notBefore := time.Now().Add(-5 * time.Minute).UTC()
+	notAfter := notBefore.AddDate(validYears, 0, 0).UTC()
 
 	template := x509.Certificate{
 		SerialNumber: new(big.Int).SetInt64(0),
 		Subject: pkix.Name{
 			Organization: []string{"Example Inc"},
+			// does not seem to be required, but makes it more similar to "real" keys
+			CommonName: "localhost",
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -75,7 +77,7 @@ func newSelfSignedCertificate() (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 }
 
-func serveWithCertAndKey(addr string, certificate tls.Certificate, handler http.Handler) error {
+func ServeWithCertAndKey(addr string, certificate tls.Certificate, handler http.Handler) error {
 	if addr == "" {
 		addr = ":https"
 	}
@@ -93,14 +95,10 @@ func serveWithCertAndKey(addr string, certificate tls.Certificate, handler http.
 	return server.Serve(tlsListener)
 }
 
-func main() {
-	certificate, err := newSelfSignedCertificate()
+func ServeWithGeneratedCert(addr string, handler http.Handler) error {
+	certificate, err := NewSelfSignedCertificate()
 	if err != nil {
-		log.Fatal("failed to generate certificate:", err)
+		return err
 	}
-
-	err = serveWithCertAndKey(":8000", certificate, http.FileServer(http.Dir(".")))
-	if err != nil {
-		log.Fatal("failed to serve:", err)
-	}
+	return ServeWithCertAndKey(addr, certificate, handler)
 }
