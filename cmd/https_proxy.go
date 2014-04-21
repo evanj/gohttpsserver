@@ -24,16 +24,25 @@ func makeProxyHeaderDirector(originalDirector func(*http.Request)) func(*http.Re
 	}
 }
 
+func fatalCommand(args ...interface{}) {
+	fmt.Fprintln(os.Stderr, args...)
+	os.Exit(1)
+}
+
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "Usage: https_proxy (remote)")
-		os.Exit(1)
+		fatalCommand("Usage: https_proxy (remote)")
 		return
 	}
 	remote, err := url.Parse(os.Args[1])
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Invalid URL:", err)
-		os.Exit(1)
+		fatalCommand("Invalid URL:", err)
+		return
+	}
+	// Early check for errors rather than at connect time
+	// TODO: Error check by calling proxy.Transport.RoundTrip instead?
+	if remote.Scheme != "http" && remote.Scheme != "https" {
+		fatalCommand("Unsupported scheme:", remote.Scheme)
 		return
 	}
 
