@@ -6,8 +6,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/binary"
 	"encoding/pem"
 	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"net/http"
@@ -29,6 +31,23 @@ const validYears = 1
 // end of ASN.1 time
 //var endOfTime = time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
 
+func getRandomSerial() int64 {
+	var id int64 = 0
+	// do not permit an id of zero
+	for id == 0 {
+		err := binary.Read(rand.Reader, binary.LittleEndian, &id)
+		if err != nil {
+			panic("binary.Read failed: " + err.Error())
+		}
+	}
+
+	// clear the top bit to force it to be positive
+	id &= ^(math.MinInt64)
+	return id
+}
+
+// Based on generate_cert:
+// https://code.google.com/p/go/source/browse/src/pkg/crypto/tls/generate_cert.go
 func NewSelfSignedCertificate() (tls.Certificate, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, rsaBits)
 	if err != nil {
@@ -39,7 +58,8 @@ func NewSelfSignedCertificate() (tls.Certificate, error) {
 	notAfter := notBefore.AddDate(validYears, 0, 0).UTC()
 
 	template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
+		// must be unique to avoid errors when serial/issuer is reused with different keys
+		SerialNumber: new(big.Int).SetInt64(getRandomSerial()),
 		Subject: pkix.Name{
 			Organization: []string{"Example Inc"},
 			// does not seem to be required, but makes it more similar to "real" keys
