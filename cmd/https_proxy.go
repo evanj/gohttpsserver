@@ -1,12 +1,14 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/evanj/gohttpsserver"
 )
@@ -30,11 +32,14 @@ func fatalCommand(args ...interface{}) {
 }
 
 func main() {
-	if len(os.Args) != 2 {
+	port := flag.Int("port", 8001, "port to listen on")
+	flag.Parse()
+
+	if len(flag.Args()) != 1 {
 		fatalCommand("Usage: https_proxy (remote)")
 		return
 	}
-	remote, err := url.Parse(os.Args[1])
+	remote, err := url.Parse(flag.Arg(0))
 	if err != nil {
 		fatalCommand("Invalid URL:", err)
 		return
@@ -49,9 +54,9 @@ func main() {
 	proxy := httputil.NewSingleHostReverseProxy(remote)
 	proxy.Director = makeProxyHeaderDirector(proxy.Director)
 
-	log.Print("Serving at https://localhost:8001/")
-	err = gohttpsserver.ServeWithGeneratedCert(":8001", proxy)
+	log.Printf("Serving at https://localhost:%d/", *port)
+	err = gohttpsserver.ServeWithGeneratedCert(":"+strconv.Itoa(*port), proxy)
 	if err != nil {
-		log.Fatal("failed to serve:", err)
+		log.Fatal("failed to serve: ", err)
 	}
 }
