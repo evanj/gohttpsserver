@@ -9,10 +9,13 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"time"
 )
@@ -121,4 +124,24 @@ func ServeWithGeneratedCert(addr string, handler http.Handler) error {
 		return err
 	}
 	return ServeWithCertAndKey(addr, certificate, handler)
+}
+
+func makeProxyHeaderDirector(originalDirector func(*http.Request)) func(*http.Request) {
+	return func(r *http.Request) {
+		protocol := "http"
+		if r.TLS != nil {
+			protocol = "https"
+		}
+		log.Printf("%s %s://%s%s %s", r.Method, protocol, r.Host, r.URL, r.RemoteAddr)
+		// X-Forwarded-For is set by ReverseProxy; X-Forwarded-Proto is not
+		r.Header.Set("X-Forwarded-Proto", protocol)
+
+		originalDirector(r)
+	}
+}
+
+func NewSingleHostReverseProxy(target *url.URL) *httputil.ReverseProxy {
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.Director = makeProxyHeaderDirector(proxy.Director)
+	return proxy
 }
