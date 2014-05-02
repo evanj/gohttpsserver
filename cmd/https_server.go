@@ -9,7 +9,7 @@ import (
 
 func main() {
 	log.Print("Serving at https://localhost:8000/")
-	err := gohttpsserver.ServeWithGeneratedCert(":8000", http.FileServer(http.Dir(".")))
+	err := gohttpsserver.ServeWithNewSelfSigned(":8000", http.FileServer(http.Dir(".")))
 	if err != nil {
 		log.Fatal("failed to serve:", err)
 	}

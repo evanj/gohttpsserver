@@ -39,7 +39,7 @@ func main() {
 	proxy := gohttpsserver.NewSingleHostReverseProxy(remote)
 
 	log.Printf("Serving at https://localhost:%d/", *port)
-	err = gohttpsserver.ServeWithGeneratedCert(":"+strconv.Itoa(*port), proxy)
+	err = gohttpsserver.ServeWithNewSelfSigned(":"+strconv.Itoa(*port), proxy)
 	if err != nil {
 		log.Fatal("failed to serve: ", err)
 	}

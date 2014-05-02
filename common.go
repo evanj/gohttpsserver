@@ -49,9 +49,15 @@ func getRandomSerial() int64 {
 	return id
 }
 
+var defaultHosts = []string{"localhost", "127.0.0.1"}
+
 // Based on generate_cert:
 // https://code.google.com/p/go/source/browse/src/pkg/crypto/tls/generate_cert.go
-func NewSelfSignedCertificate() (tls.Certificate, error) {
+func NewSelfSignedCertificate(hosts []string) (tls.Certificate, error) {
+	if len(hosts) == 0 {
+		hosts = defaultHosts
+	}
+
 	priv, err := rsa.GenerateKey(rand.Reader, rsaBits)
 	if err != nil {
 		return tls.Certificate{}, err
@@ -66,7 +72,7 @@ func NewSelfSignedCertificate() (tls.Certificate, error) {
 		Subject: pkix.Name{
 			Organization: []string{"Example Inc"},
 			// does not seem to be required, but makes it more similar to "real" keys
-			CommonName: "localhost",
+			CommonName: hosts[0],
 		},
 		NotBefore: notBefore,
 		NotAfter:  notAfter,
@@ -76,7 +82,6 @@ func NewSelfSignedCertificate() (tls.Certificate, error) {
 		BasicConstraintsValid: true,
 	}
 
-	hosts := []string{"localhost", "example.com", "127.0.0.1"}
 	for _, h := range hosts {
 		if ip := net.ParseIP(h); ip != nil {
 			template.IPAddresses = append(template.IPAddresses, ip)
@@ -100,7 +105,7 @@ func NewSelfSignedCertificate() (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 }
 
-func ServeWithCertAndKey(addr string, certificate tls.Certificate, handler http.Handler) error {
+func Serve(addr string, certificate tls.Certificate, handler http.Handler) error {
 	if addr == "" {
 		addr = ":https"
 	}
@@ -118,12 +123,12 @@ func ServeWithCertAndKey(addr string, certificate tls.Certificate, handler http.
 	return server.Serve(tlsListener)
 }
 
-func ServeWithGeneratedCert(addr string, handler http.Handler) error {
-	certificate, err := NewSelfSignedCertificate()
+func ServeWithNewSelfSigned(addr string, handler http.Handler) error {
+	certificate, err := NewSelfSignedCertificate(nil)
 	if err != nil {
 		return err
 	}
-	return ServeWithCertAndKey(addr, certificate, handler)
+	return Serve(addr, certificate, handler)
 }
 
 func makeProxyHeaderDirector(originalDirector func(*http.Request)) func(*http.Request) {
