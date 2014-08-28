@@ -21,6 +21,7 @@ func fatalCommand(args ...interface{}) {
 func main() {
 	port := flag.Int("port", 8001, "port to listen on")
 	disableCertificateValidation := flag.Bool("disableCertificateValidation", false, "DANGEROUS: ignore SSL errors on outgoing connections")
+	host := flag.String("host", "", "value to override the Host header")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -48,6 +49,7 @@ func main() {
 
 	proxy := gohttpsserver.NewSingleHostReverseProxy(remote)
 	proxy.Transport = transport
+	proxy.OverrideHost = *host
 
 	log.Printf("Serving at https://localhost:%d/", *port)
 	err = gohttpsserver.ServeWithNewSelfSigned(":"+strconv.Itoa(*port), proxy)

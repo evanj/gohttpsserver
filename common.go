@@ -131,22 +131,33 @@ func ServeWithNewSelfSigned(addr string, handler http.Handler) error {
 	return Serve(addr, certificate, handler)
 }
 
-func makeProxyHeaderDirector(originalDirector func(*http.Request)) func(*http.Request) {
-	return func(r *http.Request) {
-		protocol := "http"
-		if r.TLS != nil {
-			protocol = "https"
-		}
-		log.Printf("%s %s://%s%s %s", r.Method, protocol, r.Host, r.URL, r.RemoteAddr)
-		// X-Forwarded-For is set by ReverseProxy; X-Forwarded-Proto is not
-		r.Header.Set("X-Forwarded-Proto", protocol)
-
-		originalDirector(r)
-	}
+// Wraps httputil.ReverseProxy to add additional configurable hacks
+type ReverseProxy struct {
+	*httputil.ReverseProxy
+	originalDirector func(*http.Request)
+	OverrideHost     string
 }
 
-func NewSingleHostReverseProxy(target *url.URL) *httputil.ReverseProxy {
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Director = makeProxyHeaderDirector(proxy.Director)
+func (proxy *ReverseProxy) director(r *http.Request) {
+	protocol := "http"
+	if r.TLS != nil {
+		protocol = "https"
+	}
+	log.Printf("%s %s://%s%s %s", r.Method, protocol, r.Host, r.URL, r.RemoteAddr)
+	// X-Forwarded-For is set by ReverseProxy; X-Forwarded-Proto is not
+	r.Header.Set("X-Forwarded-Proto", protocol)
+
+	// by default httputil.ReverseProxy passes the incoming Host header through
+	if proxy.OverrideHost != "" {
+		r.Host = proxy.OverrideHost
+	}
+
+	proxy.originalDirector(r)
+}
+
+func NewSingleHostReverseProxy(target *url.URL) *ReverseProxy {
+	proxy := &ReverseProxy{httputil.NewSingleHostReverseProxy(target), nil, ""}
+	proxy.originalDirector = proxy.Director
+	proxy.Director = proxy.director
 	return proxy
 }
