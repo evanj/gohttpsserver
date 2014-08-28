@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -18,6 +20,7 @@ func fatalCommand(args ...interface{}) {
 
 func main() {
 	port := flag.Int("port", 8001, "port to listen on")
+	disableCertificateValidation := flag.Bool("disableCertificateValidation", false, "DANGEROUS: ignore SSL errors on outgoing connections")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -36,7 +39,15 @@ func main() {
 		return
 	}
 
+	var transport http.RoundTripper
+	if *disableCertificateValidation {
+		defaultCopy := *http.DefaultTransport.(*http.Transport)
+		defaultCopy.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		transport = &defaultCopy
+	}
+
 	proxy := gohttpsserver.NewSingleHostReverseProxy(remote)
+	proxy.Transport = transport
 
 	log.Printf("Serving at https://localhost:%d/", *port)
 	err = gohttpsserver.ServeWithNewSelfSigned(":"+strconv.Itoa(*port), proxy)
