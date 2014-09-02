@@ -22,6 +22,7 @@ func main() {
 	port := flag.Int("port", 8001, "port to listen on")
 	disableCertificateValidation := flag.Bool("disableCertificateValidation", false, "DANGEROUS: ignore SSL errors on outgoing connections")
 	host := flag.String("host", "", "value to override the Host header")
+	mapping := flag.String("mapping", "", "additional space-separated (prefix, target) mappings")
 	flag.Parse()
 
 	if len(flag.Args()) != 1 {
@@ -50,6 +51,11 @@ func main() {
 	proxy := gohttpsserver.NewSingleHostReverseProxy(remote)
 	proxy.Transport = transport
 	proxy.OverrideHost = *host
+
+	mappings := gohttpsserver.ParseMappings(*mapping)
+	for _, mapping := range mappings {
+		proxy.MapPrefix(mapping.Prefix, mapping.Target)
+	}
 
 	log.Printf("Serving at https://localhost:%d/", *port)
 	err = gohttpsserver.ServeWithNewSelfSigned(":"+strconv.Itoa(*port), proxy)

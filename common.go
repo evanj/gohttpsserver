@@ -17,6 +17,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -131,11 +132,18 @@ func ServeWithNewSelfSigned(addr string, handler http.Handler) error {
 	return Serve(addr, certificate, handler)
 }
 
+// TODO: Make private?
+type Mapping struct {
+	Prefix string
+	Target *url.URL
+}
+
 // Wraps httputil.ReverseProxy to add additional configurable hacks
 type ReverseProxy struct {
 	*httputil.ReverseProxy
 	originalDirector func(*http.Request)
 	OverrideHost     string
+	mappings         []*Mapping
 }
 
 func (proxy *ReverseProxy) director(r *http.Request) {
@@ -153,10 +161,48 @@ func (proxy *ReverseProxy) director(r *http.Request) {
 	}
 
 	proxy.originalDirector(r)
+
+	for _, mapping := range proxy.mappings {
+		if strings.HasPrefix(r.URL.Path, mapping.Prefix) {
+			r.URL.Host = mapping.Target.Host
+			break
+		}
+	}
+}
+
+func (proxy *ReverseProxy) MapPrefix(prefix string, target *url.URL) {
+	// TODO: Return err?
+	if len(prefix) == 0 || target == nil {
+		panic("Invalid prefix or target")
+	}
+	proxy.mappings = append(proxy.mappings, &Mapping{prefix, target})
+}
+
+// TODO: Move elsewhere?
+func ParseMappings(mapping string) []*Mapping {
+	if mapping == "" {
+		return nil
+	}
+
+	parts := strings.Split(mapping, " ")
+	if len(parts)%2 != 0 {
+		panic("Invalid mapping: need 2 parts for each:" + mapping)
+	}
+	mappings := []*Mapping{}
+	for i := 0; i < len(parts); i += 2 {
+		prefix := parts[i]
+		target, err := url.Parse(parts[i+1])
+		if err != nil {
+			panic("Error parsing url: " + err.Error())
+		}
+		mappings = append(mappings, &Mapping{prefix, target})
+	}
+
+	return mappings
 }
 
 func NewSingleHostReverseProxy(target *url.URL) *ReverseProxy {
-	proxy := &ReverseProxy{httputil.NewSingleHostReverseProxy(target), nil, ""}
+	proxy := &ReverseProxy{httputil.NewSingleHostReverseProxy(target), nil, "", nil}
 	proxy.originalDirector = proxy.Director
 	proxy.Director = proxy.director
 	return proxy
